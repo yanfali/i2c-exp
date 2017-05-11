@@ -30,18 +30,12 @@ int main()
   if(fd<0) error("cant open %s - %m", PORT);
   if(ioctl(fd, I2C_SLAVE, ADDR) < 0) error("cant ioctl %s:0x%02x - %m", PORT, ADDR);
  
+  // disable encryption - may not be necessary for third party peripherals
   if(write(fd, "\xF0\x55", 2)<0) error("cant setup %s:0x%02x - %m", PORT, ADDR);
   usleep(10000);
   if(write(fd, "\xFB\x00", 2)<0) error("cant setup %s:0x%02x - %m", PORT, ADDR);
   usleep(10000);
   
-  /*
-  if(write(fd, "\xF0\xAA", 2)<0) error("cant setup %s:0x%02x - %m", PORT, ADDR);
-  if(write(fd, "\x40\x00\x00\x00\x00\x00\x00", 6)<0) error("cant setup %s:0x%02x - %m", PORT, ADDR);
-  if(write(fd, "\x40\x00\x00\x00\x00\x00\x00", 6)<0) error("cant setup %s:0x%02x - %m", PORT, ADDR);
-  if(write(fd, "\x40\x00\x00\x00\x00\x00\x00", 4)<0) error("cant setup %s:0x%02x - %m", PORT, ADDR);
-  */
-
   // request ID
   if(write(fd, "\xFA\x00", 2)<0) error("cant setup %s:0x%02x - %m", PORT, ADDR);
   usleep(10000);
@@ -69,21 +63,32 @@ int main()
 
     // 6-byte packet complete
     printf("packet %06d: ", readcnt++);
-    for (n = 0; n < 6; n++) {
+    for (n = 4; n < 6; n++) {
       printf("%d %02x ", n, buf[n]);
       printf("%03d ", buf[n]);
     }
     printf("\n");
-    char v = (~buf[5])&0b00000001;
-    printf("%c ", v ? 'U' : '.');
+    char v;
     v = (~buf[5])&0b00000010;
     printf("%c ", v ? 'L' : '.');
+    v = (~buf[5])&0b00000001;
+    printf("%c ", v ? 'U' : '.');
+    v = (~buf[4])&0b01000000;
+    printf("%c ", v ? 'D' : '.');
+    v = (~buf[4])&0b10000000;
+    printf("%c ", v ? 'R' : '.');
+    v = (~buf[5])&0b00010000;
+    printf("%c ", v ? 'A' : '.');
+    v = (~buf[5])&0b01000000;
+    printf("%c ", v ? 'B' : '.');
+    v = (~buf[4])&0b00000100;
+    printf("%c ", v ? '+' : '.');
+    v = (~buf[4])&0b00010000;
+    printf("%c ", v ? '-' : '.');
     
 
     write(fd, "\x00", 1);       // send a zero to extension peripheral to start next cycle
     printf("\n");
-    i=0;
-    memset(&buf, 0, 6);
     usleep(100000);
   } 
 }
