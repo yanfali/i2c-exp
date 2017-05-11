@@ -10,6 +10,7 @@
 
 #ifndef ADDR
 #define ADDR  0x52            // wii nunchuck address: 0x52
+#define ADDR_LED  0x70            // LED backpack: 0x70
 #endif
 
 #include <stdio.h>
@@ -33,6 +34,12 @@
 #define BUTTON_START  BUTTON_PLUS
 #define BUTTON_MINUS  0b00010000
 #define BUTTON_SELECT BUTTON_MINUS
+
+// From [Adafruit_LED_Backpack](https://github.com/adafruit/Adafruit_LED_Backpack)
+#define HT16K33_CMD_BRIGHTNESS  0xE0
+#define HT16K33_CMD_BLINK       0x80
+#define HT16K33_BLINK_DISPLAYON 0x01
+#define HT16K33_BLINK_OFF       0
 
 uint8_t button_left(char c) {
     return (~c)&BUTTON_LEFT;
@@ -70,11 +77,43 @@ void ack_packet(int fd) {
   write(fd, "\x00", 1);       // send a zero to extension peripheral to start next cycle
 }
 
+void set_brightness(int fd, uint8_t b) {
+  if (b > 15) b = 15; // 16 levels of brightness
+  uint8_t brightness = HT16K33_CMD_BRIGHTNESS | b;
+  if(write(fd, &brightness, 1)<0) error("cant setup %s:0x%02x - %m", PORT, ADDR_LED);
+}
+
+void set_blinkRate(int fd, uint8_t rate) {
+  if (rate > 3) rate = 0; // turn off if not sure
+  uint8_t blinkRate = HT16K33_CMD_BLINK | HT16K33_BLINK_DISPLAYON | (rate << 1);
+  if(write(fd, &blinkRate, 1)<0) error("cant setup %s:0x%02x - %m", PORT, ADDR_LED);
+}
+
+void clear_display(int fd) {
+  uint8_t displayBuffer[17];
+  memset(&displayBuffer, 0, sizeof(displayBuffer));
+  if(write(fd, displayBuffer, sizeof(displayBuffer))<0) error("cant setup %s:0x%02x - %m", PORT, ADDR);
+}
+
 int init_i2c() {
   // initialization: open port, ioctl address, send 0x40/0x00 init to nunchuck:
   int fd = open(PORT, O_RDWR);
   if(fd<0) error("cant open %s - %m", PORT);
   if(ioctl(fd, I2C_SLAVE, ADDR) < 0) error("cant ioctl %s:0x%02x - %m", PORT, ADDR);
+  return fd;
+}
+
+int init_i2c_led_backpack(int addr) {
+  // initialization: open port, ioctl address, send 0x40/0x00 init to nunchuck:
+  int fd = open(PORT, O_RDWR);
+  if(fd<0) error("cant open %s - %m", PORT);
+  if(ioctl(fd, I2C_SLAVE, addr) < 0) error("cant ioctl %s:0x%02x - %m", PORT, addr);
+  // turn on oscillator
+  if(write(fd, "\x21", 1)<0) error("cant setup %s:0x%02x - %m", PORT, ADDR);
+  set_blinkRate(fd, HT16K33_BLINK_OFF);
+  set_brightness(fd, 15);
+  sleep(2);
+  clear_display(fd);
   return fd;
 }
 
@@ -108,8 +147,13 @@ int main()
 
   int fd = init_i2c(); 
   disable_encryption(fd);
-
   request_device_id(fd);
+
+  int bfd = init_i2c_led_backpack(0x70);
+
+  uint8_t displayBuffer[17];
+  memset(&displayBuffer, 0, sizeof(displayBuffer));
+
 
   for(;;)
   {
