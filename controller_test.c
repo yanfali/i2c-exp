@@ -89,10 +89,45 @@ void set_blinkRate(int fd, uint8_t rate) {
   if(write(fd, &blinkRate, 1)<0) error("cant setup %s:0x%02x - %m", PORT, ADDR_LED);
 }
 
+void write_display(int fd, uint8_t displayBuffer[]) {
+  if(write(fd, displayBuffer, 17)<0) error("cant setup %s:0x%02x - %m", PORT, ADDR);
+}
+
 void clear_display(int fd) {
   uint8_t displayBuffer[17];
   memset(&displayBuffer, 0, sizeof(displayBuffer));
-  if(write(fd, displayBuffer, sizeof(displayBuffer))<0) error("cant setup %s:0x%02x - %m", PORT, ADDR);
+  write_display(fd, displayBuffer);
+}
+
+void cycle_display(int fd) {
+  uint8_t displayBuffer[17];
+  displayBuffer[0] = 0x0;
+  for (int i = 0, index = 0; i < 8; i++) {
+    index = i*2+1; 
+    displayBuffer[index] = 0x00; // green off
+    displayBuffer[index+1] = 0xff; // red on
+  }
+  write_display(fd, displayBuffer);
+  usleep(250000);
+
+  memset(&displayBuffer[1], 0xff, sizeof(displayBuffer)); // both on - yellow
+  write_display(fd, displayBuffer);
+  usleep(250000);
+
+  for (int i = 0, index = 0; i < 8; i++) {
+    index = i*2+1; 
+    displayBuffer[index] = 0xff;   // green on
+    displayBuffer[index+1] = 0x00; // red off
+  }
+  write_display(fd, displayBuffer);
+  usleep(250000);
+}
+
+void all_on_display(int fd) {
+  uint8_t displayBuffer[17];
+  displayBuffer[0] = 0x0;
+  memset(&displayBuffer[1], 0xff, sizeof(displayBuffer));
+  write_display(fd, displayBuffer);
 }
 
 int init_i2c() {
@@ -112,7 +147,7 @@ int init_i2c_led_backpack(int addr) {
   if(write(fd, "\x21", 1)<0) error("cant setup %s:0x%02x - %m", PORT, ADDR);
   set_blinkRate(fd, HT16K33_BLINK_OFF);
   set_brightness(fd, 15);
-  sleep(2);
+  cycle_display(fd);
   clear_display(fd);
   return fd;
 }
