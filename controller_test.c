@@ -66,6 +66,10 @@ uint8_t button_select(char c) {
     return (~c)&BUTTON_SELECT;
 }
 
+void ack_packet(int fd) {
+  write(fd, "\x00", 1);       // send a zero to extension peripheral to start next cycle
+}
+
 int init_i2c() {
   // initialization: open port, ioctl address, send 0x40/0x00 init to nunchuck:
   int fd = open(PORT, O_RDWR);
@@ -92,6 +96,7 @@ void request_device_id(int fd) {
   }
   printf("Ident %02x:%02x:%02x:%02x:%02x:%02x\n", buf[0], buf[1], buf[2], buf[3], buf[4], buf[5]);
   if(n<0) error("read error %s:0x%02x - %m", PORT, ADDR);
+  ack_packet(fd);
   sleep(2);
 }
 
@@ -99,6 +104,7 @@ int main()
 {
   int i=0, n=0, readcnt=1;
   unsigned char buf[6];
+  memset(buf, 0, sizeof(buf));
 
   int fd = init_i2c(); 
   disable_encryption(fd);
@@ -120,15 +126,13 @@ int main()
     if(++i<6) continue;     // continue to read until a packet is complete
     i=0;                    // reset the index
 
-
     // 6-byte packet complete
     printf("packet %06d: ", readcnt++);
     for (n = 4; n < 6; n++) {
       printf("%d %02x ", n, buf[n]);
       printf("%03d ", buf[n]);
     }
-    printf("\n");
-    char v;
+
     printf("%c ", button_left(buf[5]) ? 'L' : '.');
     printf("%c ", button_up(buf[5]) ? 'U' : '.');
     printf("%c ", button_down(buf[4]) ? 'D' : '.');
@@ -138,8 +142,7 @@ int main()
     printf("%c ", button_start(buf[4]) ? '+' : '.');
     printf("%c ", button_select(buf[4]) ? '-' : '.');
     
-
-    write(fd, "\x00", 1);       // send a zero to extension peripheral to start next cycle
+    ack_packet(fd);
     printf("\n");
     usleep(100000);
   } 
