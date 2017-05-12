@@ -123,6 +123,19 @@ void cycle_display(int fd) {
   usleep(250000);
 }
 
+// diagnostic function
+void corner_display(int fd) {
+  uint8_t displayBuffer[17];
+  memset(displayBuffer, 0, sizeof(displayBuffer));
+  displayBuffer[0] = 0x0;
+  // in relation to the connector which is nearest to 7,3 and 7,4
+  displayBuffer[1] = 0b10000000;  // logical 0,0 - green
+  displayBuffer[2] = 0b00000001;  // logical 7,0 - red
+  displayBuffer[15] = 0b10000001; // logical 0,7 - yellow
+  displayBuffer[16] = 0b10000000; // logical 7,7  - green
+  write_display(fd, displayBuffer);
+}
+
 void all_on_display(int fd) {
   uint8_t displayBuffer[17];
   displayBuffer[0] = 0x0;
@@ -185,9 +198,12 @@ int main()
   request_device_id(fd);
 
   int bfd = init_i2c_led_backpack(0x70);
+  corner_display(bfd);
 
   uint8_t displayBuffer[17];
   memset(&displayBuffer, 0, sizeof(displayBuffer));
+
+
 
 
   for(;;)
