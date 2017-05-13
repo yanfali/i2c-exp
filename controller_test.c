@@ -35,6 +35,7 @@
 #define BUTTON_MINUS  0b00010000
 #define BUTTON_SELECT BUTTON_MINUS
 
+#define OFF    0
 #define GREEN  1
 #define RED    2
 #define YELLOW 3
@@ -69,12 +70,12 @@ uint8_t button_b(char c[]) {
     return (~c[5])&BUTTON_B;
 }
 
-uint8_t button_start(char c) {
-    return (~c)&BUTTON_START;
+uint8_t button_start(char c[]) {
+    return (~c[4])&BUTTON_START;
 }
 
-uint8_t button_select(char c) {
-    return (~c)&BUTTON_SELECT;
+uint8_t button_select(char c[]) {
+    return (~c[4])&BUTTON_SELECT;
 }
 
 void ack_packet(int fd) {
@@ -104,7 +105,7 @@ void merge_buffer(uint8_t dst[], uint8_t src[], int color) {
 			start[i*2] |= src[i];
 		} else if (color == RED) {
 			start[i*2+1] |= src[i];
-		} else {
+		} else if (color == YELLOW) { 
 			// YELLOW
 			start[i*2] |= src[i];
 			start[i*2+1] |= src[i];
@@ -346,6 +347,7 @@ int main()
 
   int eye_color = GREEN;
   int pupil_color = RED;
+  int blink_rate = 0;
   for(;;)
   {
     n = read(fd, buf+i, 1); // read one byte (at index i)
@@ -374,8 +376,8 @@ int main()
     printf("%c ", button_right(buf) ? 'R' : '.');
     printf("%c ", button_a(buf) ? 'A' : '.');
     printf("%c ", button_b(buf) ? 'B' : '.');
-    printf("%c ", button_start(buf[4]) ? '+' : '.');
-    printf("%c ", button_select(buf[4]) ? '-' : '.');
+    printf("%c ", button_start(buf) ? '+' : '.');
+    printf("%c ", button_select(buf) ? '-' : '.');
 
     memset(&displayBuffer, 0, sizeof(displayBuffer));
 
@@ -386,6 +388,16 @@ int main()
          pupil_color = YELLOW;
     } else {
          pupil_color = RED;
+    } 
+
+    if (button_start(buf)) {
+         pupil_color = OFF;
+    }
+
+    if (button_select(buf)) {
+	 blink_rate++;
+	 blink_rate %= 4;
+         set_blinkRate(bfd, blink_rate);
     }
 
     if (button_left(buf) && button_up(buf)) {
