@@ -35,34 +35,38 @@
 #define BUTTON_MINUS  0b00010000
 #define BUTTON_SELECT BUTTON_MINUS
 
+#define GREEN  1
+#define RED    2
+#define YELLOW 3
+
 // From [Adafruit_LED_Backpack](https://github.com/adafruit/Adafruit_LED_Backpack)
 #define HT16K33_CMD_BRIGHTNESS  0xE0
 #define HT16K33_CMD_BLINK       0x80
 #define HT16K33_BLINK_DISPLAYON 0x01
 #define HT16K33_BLINK_OFF       0
 
-uint8_t button_left(char c) {
-    return (~c)&BUTTON_LEFT;
+uint8_t button_left(char c[]) {
+    return (~c[5])&BUTTON_LEFT;
 }
 
-uint8_t button_up(char c) {
-    return (~c)&BUTTON_UP;
+uint8_t button_up(char c[]) {
+    return (~c[5])&BUTTON_UP;
 }
 
-uint8_t button_down(char c) {
-    return (~c)&BUTTON_DOWN;
+uint8_t button_down(char c[]) {
+    return (~c[4])&BUTTON_DOWN;
 }
 
-uint8_t button_right(char c) {
-    return (~c)&BUTTON_RIGHT;
+uint8_t button_right(char c[]) {
+    return (~c[4])&BUTTON_RIGHT;
 }
 
-uint8_t button_a(char c) {
-    return (~c)&BUTTON_A;
+uint8_t button_a(char c[]) {
+    return (~c[5])&BUTTON_A;
 }
 
-uint8_t button_b(char c) {
-    return (~c)&BUTTON_B;
+uint8_t button_b(char c[]) {
+    return (~c[5])&BUTTON_B;
 }
 
 uint8_t button_start(char c) {
@@ -91,6 +95,21 @@ void set_blinkRate(int fd, uint8_t rate) {
 
 void write_display(int fd, uint8_t displayBuffer[]) {
   if(write(fd, displayBuffer, 17)<0) error("cant setup %s:0x%02x - %m", PORT, ADDR);
+}
+
+void merge_buffer(uint8_t dst[], uint8_t src[], int color) {
+	uint8_t *start = &dst[1];
+	for (int i = 0; i < 8; i++) {
+		if (color == GREEN) {
+			start[i*2] |= src[i];
+		} else if (color == RED) {
+			start[i*2+1] |= src[i];
+		} else {
+			// YELLOW
+			start[i*2] |= src[i];
+			start[i*2+1] |= src[i];
+		}
+	}
 }
 
 void clear_display(int fd) {
@@ -187,6 +206,124 @@ void request_device_id(int fd) {
   sleep(2);
 }
 
+// the definition of up or down depends on the display orientation
+// TODO make orientation configurable
+uint8_t eyeball[] = {
+    0b01111110,
+    0b10000001,
+    0b10000001,
+    0b10000001,
+    0b10000001,
+    0b10000001,
+    0b10000001,
+    0b01111110,
+};
+
+uint8_t center_pupil[] = {
+    0b00000000,
+    0b00000000,
+    0b00000000,
+    0b00011000,
+    0b00011000,
+    0b00000000,
+    0b00000000,
+    0b00000000,
+};
+
+uint8_t left_pupil[] = {
+    0b00000000,
+    0b00000000,
+    0b00000000,
+    0b01100000,
+    0b01100000,
+    0b00000000,
+    0b00000000,
+    0b00000000,
+};
+
+uint8_t left_up_pupil[] = {
+    0b00000000,
+    0b00000000,
+    0b00000000,
+    0b00000000,
+    0b00000000,
+    0b01100000,
+    0b01100000,
+    0b00000000,
+};
+
+uint8_t left_down_pupil[] = {
+    0b00000000,
+    0b01100000,
+    0b01100000,
+    0b00000000,
+    0b00000000,
+    0b00000000,
+    0b00000000,
+    0b00000000,
+};
+
+uint8_t right_pupil[] = {
+    0b00000000,
+    0b00000000,
+    0b00000000,
+    0b00000110,
+    0b00000110,
+    0b00000000,
+    0b00000000,
+    0b00000000,
+};
+
+uint8_t right_up_pupil[] = {
+    0b00000000,
+    0b00000000,
+    0b00000000,
+    0b00000000,
+    0b00000000,
+    0b00000110,
+    0b00000110,
+    0b00000000,
+};
+
+uint8_t right_down_pupil[] = {
+    0b00000000,
+    0b00000110,
+    0b00000110,
+    0b00000000,
+    0b00000000,
+    0b00000000,
+    0b00000000,
+    0b00000000,
+};
+
+uint8_t up_pupil[] = {
+    0b00000000,
+    0b00000000,
+    0b00000000,
+    0b00000000,
+    0b00000000,
+    0b00011000,
+    0b00011000,
+    0b00000000,
+};
+
+uint8_t down_pupil[] = {
+    0b00000000,
+    0b00011000,
+    0b00011000,
+    0b00000000,
+    0b00000000,
+    0b00000000,
+    0b00000000,
+    0b00000000,
+};
+
+void update_display_buffer(int fd, uint8_t buf[], uint8_t layer1[], uint8_t layer2[], int color1, int color2) {
+  merge_buffer(buf, layer1, color1);
+  merge_buffer(buf, layer2, color2);
+  write_display(fd, buf);
+}
+
 int main()
 {
   int i=0, n=0, readcnt=1;
@@ -203,9 +340,12 @@ int main()
   uint8_t displayBuffer[17];
   memset(&displayBuffer, 0, sizeof(displayBuffer));
 
+  merge_buffer(displayBuffer, eyeball, 1);
+  merge_buffer(displayBuffer, center_pupil, 2);
+  write_display(bfd, displayBuffer);
 
-
-
+  int eye_color = GREEN;
+  int pupil_color = RED;
   for(;;)
   {
     n = read(fd, buf+i, 1); // read one byte (at index i)
@@ -228,14 +368,46 @@ int main()
       printf("%03d ", buf[n]);
     }
 
-    printf("%c ", button_left(buf[5]) ? 'L' : '.');
-    printf("%c ", button_up(buf[5]) ? 'U' : '.');
-    printf("%c ", button_down(buf[4]) ? 'D' : '.');
-    printf("%c ", button_right(buf[4]) ? 'R' : '.');
-    printf("%c ", button_a(buf[5]) ? 'A' : '.');
-    printf("%c ", button_b(buf[5]) ? 'B' : '.');
+    printf("%c ", button_left(buf) ? 'L' : '.');
+    printf("%c ", button_up(buf) ? 'U' : '.');
+    printf("%c ", button_down(buf) ? 'D' : '.');
+    printf("%c ", button_right(buf) ? 'R' : '.');
+    printf("%c ", button_a(buf) ? 'A' : '.');
+    printf("%c ", button_b(buf) ? 'B' : '.');
     printf("%c ", button_start(buf[4]) ? '+' : '.');
     printf("%c ", button_select(buf[4]) ? '-' : '.');
+
+    memset(&displayBuffer, 0, sizeof(displayBuffer));
+
+    // change eye color for button presses
+    if (button_a(buf)) {
+         pupil_color = GREEN;
+    } else if (button_b(buf)) {
+         pupil_color = YELLOW;
+    } else {
+         pupil_color = RED;
+    }
+
+    if (button_left(buf) && button_up(buf)) {
+	update_display_buffer(bfd, displayBuffer, eyeball, left_up_pupil, eye_color, pupil_color);
+    } else if (button_left(buf) && button_down(buf)) {
+	update_display_buffer(bfd, displayBuffer, eyeball, left_down_pupil, eye_color, pupil_color);
+    } else if (button_left(buf)) {
+	update_display_buffer(bfd, displayBuffer, eyeball, left_pupil, eye_color, pupil_color);
+    } else if (button_right(buf) && button_up(buf)) {
+	update_display_buffer(bfd, displayBuffer, eyeball, right_up_pupil, eye_color, pupil_color);
+    } else if (button_right(buf) && button_down(buf)) {
+	update_display_buffer(bfd, displayBuffer, eyeball, right_down_pupil, eye_color, pupil_color);
+    } else if (button_right(buf)) {
+	update_display_buffer(bfd, displayBuffer, eyeball, right_pupil, eye_color, pupil_color);
+    } else if (button_up(buf)) {
+	update_display_buffer(bfd, displayBuffer, eyeball, up_pupil, eye_color, pupil_color);
+    } else if (button_down(buf)) {
+	update_display_buffer(bfd, displayBuffer, eyeball, down_pupil, eye_color, pupil_color);
+    } else {
+	update_display_buffer(bfd, displayBuffer, eyeball, center_pupil, eye_color, pupil_color);
+    }
+    
     
     ack_packet(fd);
     printf("\n");
